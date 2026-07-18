@@ -128,23 +128,33 @@
       float perp  = dot(rel, nrm);   // signed perpendicular
 
       // ---------- tail body ----------
+      // flame-wave warp: traveling waves ripple the tail's centerline,
+      // anchored at the head (zero amplitude) and growing down the tail
+      // so filaments look like they're gushing off the nucleus.
+      float wamp = 0.016 * smoothstep(0.0, 0.55, along);
+      float wave = sin(along * 14.0 - uTime * 3.2)
+                 + 0.5 * sin(along * 27.0 - uTime * 5.1 + 1.3);
+      wave += 1.4 * (fbm(vec2(along * 3.5 - uTime * 0.9, perp * 6.0)) - 0.5);
+      float perpW = perp + wave * wamp;
+
       // near-constant width: expands only 10% beyond the head width
       float w = 0.006 + 0.0006 * smoothstep(0.0, 1.1, along);
-      float body = exp(-(perp * perp) / (2.0 * w * w));
+      float body = exp(-(perpW * perpW) / (2.0 * w * w));
 
       // length falloff (bright near head, long reach)
       float lenFall = 0.9 * exp(-along * 2.6) + 0.3 * exp(-along * 0.85);
       lenFall *= smoothstep(-0.02, 0.03, along); // don't draw behind head
 
-      // filament streaks along the tail
-      float streakCoord = perp / max(w, 0.001);
+      // filament streaks along the tail (ride the wave-warped centerline)
+      float streakCoord = perpW / max(w, 0.001);
       // filaments stream away from the head (matching the star drift speed-feel)
       float fil = fbm(vec2(streakCoord * 2.2, along * 5.0 - uTime * 1.1));
-      float fine = 0.5 + 0.5 * sin(streakCoord * 9.0 + fbm(vec2(along * 8.0, perp * 30.0)) * 6.0);
+      float fine = 0.5 + 0.5 * sin(streakCoord * 9.0 + fbm(vec2(along * 8.0, perpW * 30.0)) * 6.0);
       float tail = body * lenFall * (0.55 + 0.7 * fil) * (0.7 + 0.4 * fine);
 
-      // soft wide outer glow of the tail (haze)
-      float haze = exp(-(perp * perp) / (2.0 * (w * 2.2) * (w * 2.2)));
+      // soft wide outer glow of the tail (haze follows the waves loosely)
+      float perpH = perp + wave * wamp * 0.6;
+      float haze = exp(-(perpH * perpH) / (2.0 * (w * 2.2) * (w * 2.2)));
       haze *= (0.35 * exp(-along * 1.8) + 0.12 * exp(-along * 0.6));
       haze *= smoothstep(-0.02, 0.03, along);
 

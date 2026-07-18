@@ -128,8 +128,8 @@
       float perp  = dot(rel, nrm);   // signed perpendicular
 
       // ---------- tail body ----------
-      // widen with distance from head
-      float w = 0.006 + 0.055 * smoothstep(0.0, 1.1, along);
+      // near-constant width: expands only 10% beyond the head width
+      float w = 0.006 + 0.0006 * smoothstep(0.0, 1.1, along);
       float body = exp(-(perp * perp) / (2.0 * w * w));
 
       // length falloff (bright near head, long reach)

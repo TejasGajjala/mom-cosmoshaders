@@ -73,7 +73,8 @@
         float scale = 70.0 + i * 65.0;
         // nearer layers (larger i -> smaller stars? keep: layer 0 nearest)
         float par = 1.0 - i * 0.35;   // parallax factor per layer
-        vec2 g = (vec2(uv.x * aspect, uv.y) + drift * par) * scale;
+        // subtracting shifts the visible pattern toward +drift on screen
+        vec2 g = (vec2(uv.x * aspect, uv.y) - drift * par) * scale;
         vec2 id = floor(g);
         vec2 f = fract(g) - 0.5;
         float h = hash21(id + i * 71.3);

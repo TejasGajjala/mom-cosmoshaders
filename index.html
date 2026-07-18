@@ -65,11 +65,15 @@
     }
 
     // ---------- starfield ----------
-    vec3 stars(vec2 uv, float aspect) {
+    // drift: world-space offset applied per layer (parallax) so stars
+    // stream past the camera-locked comet.
+    vec3 stars(vec2 uv, float aspect, vec2 drift) {
       vec3 col = vec3(0.0);
       for (float i = 0.0; i < 3.0; i++) {
         float scale = 70.0 + i * 65.0;
-        vec2 g = vec2(uv.x * aspect, uv.y) * scale;
+        // nearer layers (larger i -> smaller stars? keep: layer 0 nearest)
+        float par = 1.0 - i * 0.35;   // parallax factor per layer
+        vec2 g = (vec2(uv.x * aspect, uv.y) + drift * par) * scale;
         vec2 id = floor(g);
         vec2 f = fract(g) - 0.5;
         float h = hash21(id + i * 71.3);
@@ -96,30 +100,27 @@
       vec3 col = vec3(0.0);
 
       // ---------- background stars ----------
-      col += stars(uv, aspect);
+      // comet flies toward -dir, so the star field streams toward +dir
+      float angBg = radians(47.0);
+      vec2 dirBg = vec2(cos(angBg), sin(angBg));
+      col += stars(uv, aspect, dirBg * uTime * 0.045);
 
-      // all comet light accumulates here, faded in/out at the loop ends
+      // all comet light accumulates here
       vec3 comet = vec3(0.0);
 
-      // ---------- comet motion ----------
-      // tail direction: points up-right (~47 deg); the comet travels toward
-      // its leading edge, i.e. down-left (-dir).
+      // ---------- comet (camera-locked) ----------
+      // The camera tracks the comet: the head stays pinned at the hero
+      // position while the world (stars) streams past and the tail flows,
+      // so it reads as continuous motion.
       float ang = radians(47.0);
-      vec2 dir = vec2(cos(ang), sin(ang));
+      vec2 dir = vec2(cos(ang), sin(ang));   // tail axis (up-right)
       vec2 nrm = vec2(-dir.y, dir.x);
 
-      // seamless loop: head sweeps along -dir from off top-right to off
-      // bottom-left, then wraps. Fade envelope hides the wrap.
-      float loopT = 11.0;                       // seconds per pass
-      float phase = fract(uTime / loopT);
-      vec2  center = vec2(0.42 * aspect, 0.55);
-      float travel = 2.3;                        // path length (y-units)
-      // slight lateral drift for a gentle arc
-      float arc = sin(phase * 3.14159) * 0.03;
-      vec2  head = center + dir * (travel * (0.5 - phase)) + nrm * arc;
-
-      // fade in on entry, out on exit -> invisible wrap
-      float cometFade = smoothstep(0.0, 0.10, phase) * smoothstep(1.0, 0.86, phase);
+      // gentle tracking drift: the camera never holds perfectly still
+      vec2 head = vec2(0.42 * aspect, 0.55)
+                + nrm * 0.010 * sin(uTime * 0.55)
+                + dir * 0.006 * sin(uTime * 0.34 + 1.7);
+      float cometFade = 1.0;
 
       vec2 rel   = p - head;
       float along = dot(rel, dir);   // + toward tail
@@ -136,7 +137,8 @@
 
       // filament streaks along the tail
       float streakCoord = perp / max(w, 0.001);
-      float fil = fbm(vec2(streakCoord * 2.2, along * 5.0 - uTime * 0.25));
+      // filaments stream away from the head (matching the star drift speed-feel)
+      float fil = fbm(vec2(streakCoord * 2.2, along * 5.0 - uTime * 1.1));
       float fine = 0.5 + 0.5 * sin(streakCoord * 9.0 + fbm(vec2(along * 8.0, perp * 30.0)) * 6.0);
       float tail = body * lenFall * (0.55 + 0.7 * fil) * (0.7 + 0.4 * fine);
 

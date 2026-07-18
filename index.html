@@ -128,33 +128,42 @@
       float perp  = dot(rel, nrm);   // signed perpendicular
 
       // ---------- tail body ----------
-      // flame-wave warp: traveling waves ripple the tail's centerline,
-      // anchored at the head (zero amplitude) and growing down the tail
-      // so filaments look like they're gushing off the nucleus.
-      float wamp = 0.016 * smoothstep(0.0, 0.55, along);
-      float wave = sin(along * 14.0 - uTime * 3.2)
-                 + 0.5 * sin(along * 27.0 - uTime * 5.1 + 1.3);
-      wave += 1.4 * (fbm(vec2(along * 3.5 - uTime * 0.9, perp * 6.0)) - 0.5);
-      float perpW = perp + wave * wamp;
-
       // near-constant width: expands only 10% beyond the head width
       float w = 0.006 + 0.0006 * smoothstep(0.0, 1.1, along);
-      float body = exp(-(perpW * perpW) / (2.0 * w * w));
+
+      // soft straight base beam anchoring the strands
+      float body = exp(-(perp * perp) / (2.0 * (w * 1.1) * (w * 1.1)));
+
+      // individual filament strands, each with its own traveling wave.
+      // bright core strands stay nearly still; dim outer ones sway more,
+      // like flame tongues gushing off the nucleus.
+      float strands = 0.0;
+      for (int i = 0; i < 6; i++) {
+        float fi = float(i);
+        float h1 = hash21(vec2(fi, 3.1));
+        float h2 = hash21(vec2(fi, 7.7));
+        float h3 = hash21(vec2(fi, 11.9));
+        float o = (fi / 5.0) * 2.0 - 1.0 + (h1 - 0.5) * 0.35; // lateral slot
+        float bright = exp(-o * o * 2.5);              // center = brightest
+        float ampScale = mix(1.5, 0.3, bright);        // dim -> more motion
+        float aw = 0.0065 * smoothstep(0.0, 0.6, along) * ampScale;
+        float wv = sin(along * (9.0 + 6.0 * h2) - uTime * (2.0 + 1.6 * h3) + h1 * 6.283)
+                 + 0.5 * sin(along * (17.0 + 8.0 * h3) - uTime * (3.2 + 1.2 * h2) + h2 * 6.283);
+        float po = perp - o * w * 2.1 - wv * aw;
+        float sw = w * (0.30 + 0.20 * h2);
+        // brightness pulses streaming away from the head
+        float pulse = 0.7 + 0.6 * fbm(vec2(along * 4.0 - uTime * 1.1, fi * 13.7));
+        strands += exp(-(po * po) / (2.0 * sw * sw)) * (0.30 + 0.75 * bright) * pulse;
+      }
 
       // length falloff (bright near head, long reach)
       float lenFall = 0.9 * exp(-along * 2.6) + 0.3 * exp(-along * 0.85);
       lenFall *= smoothstep(-0.02, 0.03, along); // don't draw behind head
 
-      // filament streaks along the tail (ride the wave-warped centerline)
-      float streakCoord = perpW / max(w, 0.001);
-      // filaments stream away from the head (matching the star drift speed-feel)
-      float fil = fbm(vec2(streakCoord * 2.2, along * 5.0 - uTime * 1.1));
-      float fine = 0.5 + 0.5 * sin(streakCoord * 9.0 + fbm(vec2(along * 8.0, perpW * 30.0)) * 6.0);
-      float tail = body * lenFall * (0.55 + 0.7 * fil) * (0.7 + 0.4 * fine);
+      float tail = (0.22 * body + 0.50 * strands) * lenFall;
 
-      // soft wide outer glow of the tail (haze follows the waves loosely)
-      float perpH = perp + wave * wamp * 0.6;
-      float haze = exp(-(perpH * perpH) / (2.0 * (w * 2.2) * (w * 2.2)));
+      // soft wide outer glow of the tail (straight haze)
+      float haze = exp(-(perp * perp) / (2.0 * (w * 2.2) * (w * 2.2)));
       haze *= (0.35 * exp(-along * 1.8) + 0.12 * exp(-along * 0.6));
       haze *= smoothstep(-0.02, 0.03, along);
 

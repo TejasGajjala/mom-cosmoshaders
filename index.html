@@ -98,14 +98,28 @@
       // ---------- background stars ----------
       col += stars(uv, aspect);
 
-      // ---------- comet geometry ----------
-      // head position in aspect-corrected space
-      vec2 head = vec2(0.42 * aspect, 0.60);
+      // all comet light accumulates here, faded in/out at the loop ends
+      vec3 comet = vec3(0.0);
 
-      // tail direction: points up-right (~47 deg)
+      // ---------- comet motion ----------
+      // tail direction: points up-right (~47 deg); the comet travels toward
+      // its leading edge, i.e. down-left (-dir).
       float ang = radians(47.0);
       vec2 dir = vec2(cos(ang), sin(ang));
       vec2 nrm = vec2(-dir.y, dir.x);
+
+      // seamless loop: head sweeps along -dir from off top-right to off
+      // bottom-left, then wraps. Fade envelope hides the wrap.
+      float loopT = 11.0;                       // seconds per pass
+      float phase = fract(uTime / loopT);
+      vec2  center = vec2(0.42 * aspect, 0.55);
+      float travel = 2.3;                        // path length (y-units)
+      // slight lateral drift for a gentle arc
+      float arc = sin(phase * 3.14159) * 0.03;
+      vec2  head = center + dir * (travel * (0.5 - phase)) + nrm * arc;
+
+      // fade in on entry, out on exit -> invisible wrap
+      float cometFade = smoothstep(0.0, 0.10, phase) * smoothstep(1.0, 0.86, phase);
 
       vec2 rel   = p - head;
       float along = dot(rel, dir);   // + toward tail
@@ -136,8 +150,8 @@
       vec3 tailFar  = vec3(0.55, 0.66, 1.0);
       vec3 tailCol  = mix(tailNear, tailFar, smoothstep(0.03, 0.85, along));
 
-      col += tailCol * tail * 1.35;
-      col += mix(vec3(0.9, 0.9, 1.0), vec3(0.5, 0.62, 1.0), smoothstep(0.0, 0.7, along)) * haze * 0.9;
+      comet += tailCol * tail * 1.35;
+      comet += mix(vec3(0.9, 0.9, 1.0), vec3(0.5, 0.62, 1.0), smoothstep(0.0, 0.7, along)) * haze * 0.9;
 
       // ---------- head / nucleus ----------
       // teardrop head: rounded toward the tail, pointed toward leading edge
@@ -160,13 +174,15 @@
       float red      = exp(-dRed / 0.020) * (0.30 + 0.9 * lead);
       float redTight = exp(-dRed / 0.011) * (0.30 + 1.0 * lead);
 
-      col += vec3(1.0, 0.28, 0.40) * red * 0.80;      // pink-red halo at tip
-      col += vec3(1.0, 0.16, 0.30) * redTight * 1.10; // saturated crimson rim
-      col += vec3(1.0, 0.94, 0.90) * core * 1.7;      // white head
-      col += vec3(1.0, 1.0, 1.0)   * kernel * 2.3;    // hot kernel
+      comet += vec3(1.0, 0.28, 0.40) * red * 0.80;      // pink-red halo at tip
+      comet += vec3(1.0, 0.16, 0.30) * redTight * 1.10; // saturated crimson rim
+      comet += vec3(1.0, 0.94, 0.90) * core * 1.7;      // white head
+      comet += vec3(1.0, 1.0, 1.0)   * kernel * 2.3;    // hot kernel
 
       // subtle cool bloom around head
-      col += vec3(0.62, 0.70, 0.95) * exp(-d / 0.055) * 0.05;
+      comet += vec3(0.62, 0.70, 0.95) * exp(-d / 0.055) * 0.05;
+
+      col += comet * cometFade;
 
       // ---------- tone ----------
       col = col / (1.0 + col * 0.35);          // soft filmic-ish rolloff
@@ -234,7 +250,10 @@
     function render() {
       resize();
       gl.uniform2f(uResolution, canvas.width, canvas.height);
-      gl.uniform1f(uTime, (performance.now() - start) / 1000.0);
+      const t = (window.__forceTime !== undefined)
+        ? window.__forceTime / 1000.0
+        : (performance.now() - start) / 1000.0;
+      gl.uniform1f(uTime, t);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       requestAnimationFrame(render);
     }
